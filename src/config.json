@@ -1,0 +1,26 @@
+{
+
+    "token": "",
+    "prefix": "$",
+    "guildId": "",
+    "commandChannel": "",
+    "videoChannel": "",
+    "adminIds": [""],
+    "videosFolder": "./videos",
+    "previewCache": "/tmp/preview-cache",
+    "streamOpts": {
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "bitrateKbps": 4000,
+        "maxBitrateKbps": 4500,
+        "hardware_acc": true,
+        "videoCodec": "H265"
+    },
+    "server": {
+        "enabled": false,
+        "username": "admin",
+        "password": "admin",
+        "port": 8080
+    }
+}
