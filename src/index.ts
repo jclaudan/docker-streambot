@@ -450,29 +450,69 @@ streamer.client.login(`${process.env.DISCORD_USER_TOKEN}`);
 
 let lastPrint = "";
 
-async function playVideo(video: string, udpConn: MediaUdp, options: any) {
-    console.log("Started playing video");
+// async function playVideo(video: string, udpConn: MediaUdp, options: any) {
+//     console.log("Started playing video");
 
+//     udpConn.mediaConnection.setSpeaking(true);
+//     udpConn.mediaConnection.setVideoStatus(true);
+
+//     try {
+//         let videoStream = streamLivestreamVideo(video, udpConn, options);
+
+//         command?.on('progress', handleProgress);
+
+//         const res = await videoStream;
+//         console.log("Finished playing video");
+//     } catch (error) {
+        
+//     } finally {
+//         udpConn.mediaConnection.setSpeaking(false);
+//         udpConn.mediaConnection.setVideoStatus(false);
+//         command?.kill("SIGKILL");
+//         sendFinishMessage();
+//         cleanupStreamStatus();
+//     }
+// }
+async function playVideo(video: string, udpConn: MediaUdp) {
+    console.log("Started playing video");
     udpConn.mediaConnection.setSpeaking(true);
     udpConn.mediaConnection.setVideoStatus(true);
 
     try {
-        let videoStream = streamLivestreamVideo(video, udpConn, options);
+        if (video.endsWith(".m3u8")) {
+            console.log("Streaming .m3u8 video");
+            // Utiliser ffmpeg pour lire le flux .m3u8 et l'envoyer à Discord
+            const ffmpeg = require('fluent-ffmpeg');
+            const stream = ffmpeg(video)
+                .format('mpegts') // Format adapté pour Discord
+                .videoCodec('libx264')
+                .audioCodec('aac')
+                .on('start', () => {
+                    console.log('ffmpeg start');
+                })
+                .on('error', (err: any) => {
+                    console.error('Error streaming .m3u8 with ffmpeg:', err);
+                    throw err;
+                });
 
-        command?.on('progress', handleProgress);
+            stream.pipe(udpConn.mediaConnection.inputStream, { end: true });
+        } else {
+            const videoStream = await streamLivestreamVideo(video, udpConn);
+            videoStream;
+        }
 
-        const res = await videoStream;
         console.log("Finished playing video");
     } catch (error) {
-        
+        console.log("Error playing video: ", error);
     } finally {
         udpConn.mediaConnection.setSpeaking(false);
         udpConn.mediaConnection.setVideoStatus(false);
         command?.kill("SIGKILL");
-        sendFinishMessage();
-        cleanupStreamStatus();
+        await sendFinishMessage();
+        await cleanupStreamStatus();
     }
 }
+
 
 function handleProgress(msg: any) {
     if (shouldPrintTimemark(msg.timemark)) {
