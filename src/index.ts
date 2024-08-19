@@ -481,7 +481,6 @@ async function playVideo(video: string, udpConn: MediaUdp) {
     try {
         if (video.endsWith(".m3u8")) {
             console.log("Streaming .m3u8 video");
-            // Utiliser ffmpeg pour lire le flux .m3u8 et l'envoyer à Discord
             const ffmpeg = require('fluent-ffmpeg');
             const stream = ffmpeg(video)
                 .format('mpegts') // Format adapté pour Discord
@@ -495,10 +494,10 @@ async function playVideo(video: string, udpConn: MediaUdp) {
                     throw err;
                 });
 
-            stream.pipe(udpConn.mediaConnection.inputStream, { end: true });
+            stream.pipe(udpConn.mediaConnection.inputStream, { end: true }); // Vérifiez ici si 'inputStream' existe et est valide.
         } else {
             const videoStream = await streamLivestreamVideo(video, udpConn);
-            videoStream;
+            videoStream; // Appel correct avec les bons arguments
         }
 
         console.log("Finished playing video");
@@ -512,6 +511,7 @@ async function playVideo(video: string, udpConn: MediaUdp) {
         await cleanupStreamStatus();
     }
 }
+
 
 
 function handleProgress(msg: any) {
