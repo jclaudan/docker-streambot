@@ -492,7 +492,6 @@ let lastPrint = "";
 //         cleanupStreamStatus();
 //     }
 // }
-
 async function playVideo(videoUrl: string, udpConn: MediaUdp, options: any) {
     console.log("Started playing video");
 
@@ -500,40 +499,32 @@ async function playVideo(videoUrl: string, udpConn: MediaUdp, options: any) {
     udpConn.mediaConnection.setVideoStatus(true);
 
     try {
-        if (videoUrl.includes(".m3u8") || videoUrl.includes("rtsp")) {
-            console.log("Streaming from IPTV or similar live stream URL");
-            const ffmpeg = require('fluent-ffmpeg');
-            
-            const command = ffmpeg(videoUrl)
-                .inputOptions(['-re'])  // Read the input at native frame rate
-                .addOption('-loglevel', '0')
-                .addOption('-fflags', 'nobuffer')
-                .addOption('-analyzeduration', '0')
-                .on('start', () => {
-                    console.log('ffmpeg started streaming live content');
-                })
-                .on('error', (err) => {
-                    console.error('Error streaming live content:', err.message);
-                })
-                .on('end', () => {
-                    console.log("Stream ended");
-                    sendFinishMessage();
-                    cleanupStreamStatus();
-                });
+        const ffmpeg = require('fluent-ffmpeg');
 
-            const videoStream = command
-                .outputOptions('-c:v copy')  // Keep the original codec (this is efficient for live streaming)
-                .outputFormat('mpegts')  // Format for streaming to Discord
-                .on('progress', handleProgress)
-                .pipe(udpConn.mediaConnection.inputStream, { end: true });
+        const command = ffmpeg(videoUrl)
+            .inputOptions(['-re'])  // Read the input at native frame rate
+            .addOption('-loglevel', '0')
+            .addOption('-fflags', 'nobuffer')
+            .addOption('-analyzeduration', '0')
+            .on('start', () => {
+                console.log('ffmpeg started streaming live content');
+            })
+            .on('error', (err) => {
+                console.error('Error streaming live content:', err.message);
+            })
+            .on('end', () => {
+                console.log("Stream ended");
+                sendFinishMessage();
+                cleanupStreamStatus();
+            });
 
-            command.run();
+        // Configure video output options
+        command
+            .outputOptions('-c:v copy')  // Keep the original codec
+            .outputOptions('-f mpegts')  // Format for streaming to Discord
+            .pipe(udpConn.mediaConnection.mediaStream, { end: true });  // Stream to Discord
 
-        } else {
-            // Non-live stream, regular video handling
-            console.log(`Streaming from URL: ${videoUrl}`);
-            await streamLivestreamVideo(videoUrl, udpConn, true, options);
-        }
+        command.run();
 
     } catch (error) {
         console.log("Error playing video: ", error);
