@@ -492,46 +492,39 @@ let lastPrint = "";
 //         cleanupStreamStatus();
 //     }
 // }
-async function playVideo(videoUrl: string, udpConn: MediaUdp, options: any) {
+
+async function playVideo(videoUrl, udpConn, options) {
     console.log("Started playing video");
 
     udpConn.mediaConnection.setSpeaking(true);
     udpConn.mediaConnection.setVideoStatus(true);
 
     try {
-        const ffmpeg = require('fluent-ffmpeg');
+        const videoStream = streamLivestreamVideo(videoUrl, udpConn, true, options);
 
-        const command = ffmpeg(videoUrl)
-            .inputOptions(['-re'])  // Read the input at native frame rate
-            .addOption('-loglevel', '0')
-            .addOption('-fflags', 'nobuffer')
-            .addOption('-analyzeduration', '0')
-            .on('start', () => {
-                console.log('ffmpeg started streaming live content');
-            })
-            .on('error', (err) => {
-                console.error('Error streaming live content:', err.message);
-            })
-            .on('end', () => {
-                console.log("Stream ended");
-                sendFinishMessage();
-                cleanupStreamStatus();
-            });
+        videoStream.catch(error => {
+            console.log("Error in streaming:", error);
+        });
 
-        // Configure video output options
-        command
-            .outputOptions('-c:v copy')  // Keep the original codec
-            .outputOptions('-f mpegts')  // Format for streaming to Discord
-            .pipe(udpConn.mediaConnection.mediaStream, { end: true });  // Stream to Discord
+        // Keep the stream alive for continuous IPTV streams
+        const keepAliveInterval = setInterval(() => {
+            console.log("Checking if the stream is still alive...");
+            // Add your logic here to check if the stream is still live
+            // For example, re-fetch the stream URL or reinitialize the stream
+        }, 60000); // Adjust the interval as needed
 
-        command.run();
+        // Clear the interval when the streaming is done
+        videoStream.finally(() => {
+            clearInterval(keepAliveInterval);
+            console.log("Finished playing video");
+            udpConn.mediaConnection.setSpeaking(false);
+            udpConn.mediaConnection.setVideoStatus(false);
+        });
 
     } catch (error) {
-        console.log("Error playing video: ", error);
-    } finally {
+        console.error("Failed to play video:", error);
         udpConn.mediaConnection.setSpeaking(false);
         udpConn.mediaConnection.setVideoStatus(false);
-        command?.kill("SIGKILL");
     }
 }
 
