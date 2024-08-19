@@ -2,6 +2,7 @@ import { Client, TextChannel, CustomStatus, ActivityOptions, WebEmbed } from "di
 import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, streamOpts, Streamer } from "@dank074/discord-video-stream";
 import config from "./config.json";
 import fs from 'fs';
+import readline from 'readline';
 import path from 'path';
 import ytdl from '@distube/ytdl-core';
 import yts from 'play-dl';
@@ -19,6 +20,24 @@ require('dotenv').config()
 setStreamOpts(
     config.streamOpts
 )
+
+async function parseM3U8(filePath: string): Promise<string[]> {
+    const urls: string[] = [];
+    const fileStream = fs.createReadStream(filePath);
+
+    const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+    });
+
+    for await (const line of rl) {
+        if (line.startsWith('http') || line.startsWith('rtsp')) {
+            urls.push(line.trim());
+        }
+    }
+
+    return urls;
+}
 
 const prefix = config.prefix;
 
@@ -450,68 +469,80 @@ streamer.client.login(`${process.env.DISCORD_USER_TOKEN}`);
 
 let lastPrint = "";
 
-async function playVideo(video: string, udpConn: MediaUdp, options: any) {
+// async function playVideo(video: string, udpConn: MediaUdp, options: any) {
+//     console.log("Started playing video");
+
+//     udpConn.mediaConnection.setSpeaking(true);
+//     udpConn.mediaConnection.setVideoStatus(true);
+
+//     try {
+//         let videoStream = streamLivestreamVideo(video, udpConn, options);
+
+//         command?.on('progress', handleProgress);
+
+//         const res = await videoStream;
+//         console.log("Finished playing video");
+//     } catch (error) {
+        
+//     } finally {
+//         udpConn.mediaConnection.setSpeaking(false);
+//         udpConn.mediaConnection.setVideoStatus(false);
+//         command?.kill("SIGKILL");
+//         sendFinishMessage();
+//         cleanupStreamStatus();
+//     }
+// }
+
+async function playVideo(videoUrl: string, udpConn: MediaUdp, options: any) {
     console.log("Started playing video");
 
     udpConn.mediaConnection.setSpeaking(true);
     udpConn.mediaConnection.setVideoStatus(true);
 
     try {
-        let videoStream = streamLivestreamVideo(video, udpConn, options);
+        if (videoUrl.includes(".m3u8") || videoUrl.includes("rtsp")) {
+            console.log("Streaming from IPTV or similar live stream URL");
+            const ffmpeg = require('fluent-ffmpeg');
+            
+            const command = ffmpeg(videoUrl)
+                .inputOptions(['-re'])  // Read the input at native frame rate
+                .addOption('-loglevel', '0')
+                .addOption('-fflags', 'nobuffer')
+                .addOption('-analyzeduration', '0')
+                .on('start', () => {
+                    console.log('ffmpeg started streaming live content');
+                })
+                .on('error', (err) => {
+                    console.error('Error streaming live content:', err.message);
+                })
+                .on('end', () => {
+                    console.log("Stream ended");
+                    sendFinishMessage();
+                    cleanupStreamStatus();
+                });
 
-        command?.on('progress', handleProgress);
+            const videoStream = command
+                .outputOptions('-c:v copy')  // Keep the original codec (this is efficient for live streaming)
+                .outputFormat('mpegts')  // Format for streaming to Discord
+                .on('progress', handleProgress)
+                .pipe(udpConn.mediaConnection.inputStream, { end: true });
 
-        const res = await videoStream;
-        console.log("Finished playing video");
+            command.run();
+
+        } else {
+            // Non-live stream, regular video handling
+            console.log(`Streaming from URL: ${videoUrl}`);
+            await streamLivestreamVideo(videoUrl, udpConn, true, options);
+        }
+
     } catch (error) {
-        
+        console.log("Error playing video: ", error);
     } finally {
         udpConn.mediaConnection.setSpeaking(false);
         udpConn.mediaConnection.setVideoStatus(false);
         command?.kill("SIGKILL");
-        sendFinishMessage();
-        cleanupStreamStatus();
     }
 }
-
-// async function playVideo(video: string, udpConn: MediaUdp) {
-//     console.log("Started playing video");
-//     udpConn.mediaConnection.setSpeaking(true);
-//     udpConn.mediaConnection.setVideoStatus(true);
-
-//     try {
-//         if (video.endsWith(".m3u8")) {
-//             console.log("Streaming .m3u8 video");
-//             const ffmpeg = require('fluent-ffmpeg');
-//             const stream = ffmpeg(video)
-//                 .format('mpegts') // Format adapté pour Discord
-//                 .videoCodec('libx264')
-//                 .audioCodec('aac')
-//                 .on('start', () => {
-//                     console.log('ffmpeg start');
-//                 })
-//                 .on('error', (err: any) => {
-//                     console.error('Error streaming .m3u8 with ffmpeg:', err);
-//                     throw err;
-//                 });
-
-//             stream.pipe(udpConn.mediaConnection.inputStream, { end: true }); // Vérifiez ici si 'inputStream' existe et est valide.
-//         } else {
-//             const videoStream = await streamLivestreamVideo(video, udpConn);
-//             videoStream; // Appel correct avec les bons arguments
-//         }
-
-//         console.log("Finished playing video");
-//     } catch (error) {
-//         console.log("Error playing video: ", error);
-//     } finally {
-//         udpConn.mediaConnection.setSpeaking(false);
-//         udpConn.mediaConnection.setVideoStatus(false);
-//         command?.kill("SIGKILL");
-//         await sendFinishMessage();
-//         await cleanupStreamStatus();
-//     }
-// }
 
 
 
