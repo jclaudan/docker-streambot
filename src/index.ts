@@ -1,8 +1,8 @@
+import { Transform, TransformCallback } from "stream";
 import { Client, TextChannel, CustomStatus, ActivityOptions, WebEmbed } from "discord.js-selfbot-v13";
 // import type { H264NalSplitter, H265NalSplitter, IvfTransformer } from "@dank074/discord-video-stream";
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, streamOpts, Streamer, VideoStream, AudioStream, H264NalSplitter, H265NalSplitter, IvfTransformer, Utils } from "@dank074/discord-video-stream";
-
 import prism from "prism-media";
 import PCancelable from 'p-cancelable';
 
@@ -538,13 +538,11 @@ function isIPTVUrl(url: string): boolean {
 
 async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: any) {
     console.log("Streaming IPTV content...");
-    console.log("Streaming IPTV content:::::::::", udpConn);
 
-    return new Promise<void>((resolve, reject) => {
+    return new PCancelable<void>((resolve, reject, onCancel) => {
         try {
-            const ffmpeg = require('fluent-ffmpeg');
-            const stream = ffmpeg(videoUrl)
-                .addOption('-loglevel', 'verbose')  // Add verbose logging for debugging
+            const ffmpegCommand = ffmpeg(videoUrl)
+                .addOption('-loglevel', 'verbose')
                 .on('start', () => {
                     console.log('FFmpeg process started for IPTV stream.');
                 })
@@ -557,7 +555,6 @@ async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: an
                     reject(err);
                 });
 
-            // This section handles the video stream similar to streamLivestreamVideo
             const streamOpts = udpConn.mediaConnection.streamOptions;
             const videoStream = new VideoStream(udpConn, streamOpts.fps, streamOpts.readAtNativeFps);
             const videoCodec = normalizeVideoCodec(streamOpts.videoCodec);
@@ -577,12 +574,12 @@ async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: an
                     throw new Error("Codec not supported");
             }
 
-            stream.output(StreamOutput(videoOutput).url, { end: false })
+            ffmpegCommand.output(StreamOutput(videoOutput).url, { end: false })
                 .noAudio()
                 .size(`${streamOpts.width}x${streamOpts.height}`)
                 .fpsOutput(streamOpts.fps)
                 .videoBitrate(`${streamOpts.bitrateKbps}k`)
-                .format(videoCodec === 'VP8' ? 'ivf' : 'h264') // Assuming h264 as fallback
+                .format(videoCodec === 'VP8' ? 'ivf' : 'h264')
                 .outputOptions(videoCodec === 'H265' ? [
                     '-tune zerolatency',
                     '-pix_fmt yuv420p',
@@ -609,7 +606,7 @@ async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: an
                 const audioStream: AudioStream = new AudioStream(udpConn);
                 const opus = new prism.opus.Encoder({ channels: 2, rate: 48000, frameSize: 960 });
 
-                stream.output(StreamOutput(opus).url, { end: false })
+                ffmpegCommand.output(StreamOutput(opus).url, { end: false })
                     .noVideo()
                     .audioChannels(2)
                     .audioFrequency(48000)
@@ -618,15 +615,17 @@ async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: an
                 opus.pipe(audioStream, { end: false });
             }
 
-            stream.run();
-            onCancel(() => stream.kill("SIGINT"));
+            ffmpegCommand.run();
+            onCancel(() => {
+                console.log("Cancelling the IPTV stream...");
+                ffmpegCommand.kill("SIGINT");
+            });
         } catch (error) {
             console.error('Failed to stream IPTV content:', error);
             reject(error);
         }
     });
 }
-
 
 
 
