@@ -1,5 +1,11 @@
 import { Client, TextChannel, CustomStatus, ActivityOptions, WebEmbed } from "discord.js-selfbot-v13";
-import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, streamOpts, Streamer } from "@dank074/discord-video-stream";
+// import type { H264NalSplitter, H265NalSplitter, IvfTransformer } from "@dank074/discord-video-stream";
+import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
+import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, streamOpts, Streamer, VideoStream, AudioStream, H264NalSplitter, H265NalSplitter, IvfTransformer } from "@dank074/discord-video-stream";
+
+import prism from "prism-media";
+import PCancelable from 'p-cancelable';
+
 import config from "./config.json";
 import fs from 'fs';
 import readline from 'readline';
