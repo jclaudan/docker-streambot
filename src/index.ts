@@ -4,7 +4,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, Streamer, VideoStream, AudioStream, H264NalSplitter, H265NalSplitter, IvfTransformer, Utils } from "@dank074/discord-video-stream";
 import prism from "prism-media";
-import PCancelable from 'p-cancelable';
+const PCancelable = import('p-cancelable');
 
 import config from "./config.json";
 import fs from 'fs';
