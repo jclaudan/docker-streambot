@@ -4,7 +4,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, Streamer, VideoStream, AudioStream, H264NalSplitter, H265NalSplitter, IvfTransformer, Utils } from "@dank074/discord-video-stream";
 import prism from "prism-media";
-const PCancelable = import('p-cancelable');
+
 
 import config from "./config.json";
 import fs from 'fs';
@@ -510,7 +510,7 @@ function isIPTVUrl(url: string): boolean {
 
 async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: any) {
     console.log("Streaming IPTV content...");
-
+    const PCancelable = await import('p-cancelable');
     return new PCancelable<void>((resolve, reject, onCancel) => {
         try {
             const ffmpegCommand = ffmpeg(videoUrl)
