@@ -1,5 +1,6 @@
 import { Transform, TransformCallback } from "stream";
 import { Client, TextChannel, CustomStatus, ActivityOptions, WebEmbed } from "discord.js-selfbot-v13";
+import ffmpeg from 'fluent-ffmpeg';
 // import type { H264NalSplitter, H265NalSplitter, IvfTransformer } from "@dank074/discord-video-stream";
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import { command, streamLivestreamVideo, MediaUdp, setStreamOpts, streamOpts, Streamer, VideoStream, AudioStream, H264NalSplitter, H265NalSplitter, IvfTransformer, Utils } from "@dank074/discord-video-stream";
