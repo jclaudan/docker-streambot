@@ -493,40 +493,133 @@ let lastPrint = "";
 //     }
 // }
 
-async function playVideo(videoUrl, udpConn, options) {
-    console.log("Started playing video");
+async function playVideo(videoUrl: string, udpConn: MediaUdp, options: any) {
+    console.log("Starting the video playback...");
+
+    // Log the video URL and options to ensure they are correct
+    console.log(`Video URL: ${videoUrl}`);
+    console.log(`Options: ${JSON.stringify(options)}`);
 
     udpConn.mediaConnection.setSpeaking(true);
     udpConn.mediaConnection.setVideoStatus(true);
 
     try {
-        const videoStream = streamLivestreamVideo(videoUrl, udpConn, true, options);
+        if (isIPTVUrl(videoUrl)) {
+            console.log("Detected IPTV stream, handling it separately...");
+            await streamIPTV(videoUrl, udpConn, options);
+        } else {
+            console.log("Handling as a regular video stream...");
+            await streamLivestreamVideo(videoUrl, udpConn, true, options);
+        }
 
-        videoStream.catch(error => {
-            console.log("Error in streaming:", error);
-        });
-
-        // Keep the stream alive for continuous IPTV streams
-        const keepAliveInterval = setInterval(() => {
-            console.log("Checking if the stream is still alive...");
-            // Add your logic here to check if the stream is still live
-            // For example, re-fetch the stream URL or reinitialize the stream
-        }, 60000); // Adjust the interval as needed
-
-        // Clear the interval when the streaming is done
-        videoStream.finally(() => {
-            clearInterval(keepAliveInterval);
-            console.log("Finished playing video");
-            udpConn.mediaConnection.setSpeaking(false);
-            udpConn.mediaConnection.setVideoStatus(false);
-        });
-
+        console.log("Video stream should now be playing.");
     } catch (error) {
-        console.error("Failed to play video:", error);
+        console.error("Error occurred while trying to play the video:", error);
+    } finally {
         udpConn.mediaConnection.setSpeaking(false);
         udpConn.mediaConnection.setVideoStatus(false);
+        command?.kill("SIGKILL");
+        sendFinishMessage();
+        cleanupStreamStatus();
     }
 }
+
+function isIPTVUrl(url: string): boolean {
+    // Check if the URL seems to be an IPTV stream
+    return url.includes('.m3u8') || url.startsWith('rtsp://') || url.includes('iptv');
+}
+
+async function streamIPTV(videoUrl: string, udpConn: MediaUdp, options: any) {
+    console.log("Streaming IPTV content...");
+
+    return new Promise<void>((resolve, reject) => {
+        try {
+            const ffmpeg = require('fluent-ffmpeg');
+            const stream = ffmpeg(videoUrl)
+                .addOption('-loglevel', 'verbose')  // Add verbose logging for debugging
+                .on('start', () => {
+                    console.log('FFmpeg process started for IPTV stream.');
+                })
+                .on('end', () => {
+                    console.log('IPTV stream ended.');
+                    resolve();
+                })
+                .on('error', (err: any) => {
+                    console.error('Error during IPTV streaming:', err);
+                    reject(err);
+                });
+
+            // This section handles the video stream similar to streamLivestreamVideo
+            const streamOpts = udpConn.mediaConnection.streamOptions;
+            const videoStream = new VideoStream(udpConn, streamOpts.fps, streamOpts.readAtNativeFps);
+            const videoCodec = normalizeVideoCodec(streamOpts.videoCodec);
+            let videoOutput: Transform;
+
+            switch (videoCodec) {
+                case 'H264':
+                    videoOutput = new H264NalSplitter();
+                    break;
+                case 'H265':
+                    videoOutput = new H265NalSplitter();
+                    break;
+                case "VP8":
+                    videoOutput = new IvfTransformer();
+                    break;
+                default:
+                    throw new Error("Codec not supported");
+            }
+
+            stream.output(StreamOutput(videoOutput).url, { end: false })
+                .noAudio()
+                .size(`${streamOpts.width}x${streamOpts.height}`)
+                .fpsOutput(streamOpts.fps)
+                .videoBitrate(`${streamOpts.bitrateKbps}k`)
+                .format(videoCodec === 'VP8' ? 'ivf' : 'h264') // Assuming h264 as fallback
+                .outputOptions(videoCodec === 'H265' ? [
+                    '-tune zerolatency',
+                    '-pix_fmt yuv420p',
+                    `-preset ${streamOpts.h26xPreset}`,
+                    '-profile:v main',
+                    `-g ${streamOpts.fps}`,
+                    `-bf 0`,
+                    `-x265-params keyint=${streamOpts.fps}:min-keyint=${streamOpts.fps}`,
+                    '-bsf:v hevc_metadata=aud=insert'
+                ] : [
+                    '-tune zerolatency',
+                    '-pix_fmt yuv420p',
+                    `-preset ${streamOpts.h26xPreset}`,
+                    '-profile:v baseline',
+                    `-g ${streamOpts.fps}`,
+                    `-bf 0`,
+                    `-x264-params keyint=${streamOpts.fps}:min-keyint=${streamOpts.fps}`,
+                    '-bsf:v h264_metadata=aud=insert'
+                ]);
+
+            videoOutput.pipe(videoStream, { end: false });
+
+            if (options.includeAudio) {
+                const audioStream: AudioStream = new AudioStream(udpConn);
+                const opus = new prism.opus.Encoder({ channels: 2, rate: 48000, frameSize: 960 });
+
+                stream.output(StreamOutput(opus).url, { end: false })
+                    .noVideo()
+                    .audioChannels(2)
+                    .audioFrequency(48000)
+                    .format('s16le');
+
+                opus.pipe(audioStream, { end: false });
+            }
+
+            stream.run();
+            onCancel(() => stream.kill("SIGINT"));
+        } catch (error) {
+            console.error('Failed to stream IPTV content:', error);
+            reject(error);
+        }
+    });
+}
+
+
 
 
 
