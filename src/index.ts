@@ -535,8 +535,9 @@ function isIPTVUrl(url: string): boolean {
     return url.includes('.m3u8') || url.startsWith('rtsp://') || url.includes('iptv');
 }
 
-async function streamIPTV(videoUrl: string, udpConn: MediaUdp, options: any) {
+async function streamIPTV(videoUrl: string, udpConn: MediaUdp | any, options: any) {
     console.log("Streaming IPTV content...");
+    console.log("Streaming IPTV content:::::::::", udpConn);
 
     return new Promise<void>((resolve, reject) => {
         try {
